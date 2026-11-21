@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Meet replay</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app" class="empty">
+    <header class="masthead">
+      <div class="headings">
+        <h1 id="title">Meet replay</h1>
+        <p id="subtitle">Follow a powerlifting scoresheet as it filled in, without seeing the end.</p>
+      </div>
+      <div class="sources">
+        <div class="meet-picker">
+          <input type="search" id="meet-search" aria-label="Search LiftingCast meets"
+            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="meet-results"
+            placeholder="Loading LiftingCast meets…" autocomplete="off" disabled>
+          <div id="meet-popup" class="meet-popup" hidden>
+            <ul id="meet-results" role="listbox" aria-label="Matching LiftingCast meets"></ul>
+            <p id="meet-no-matches" role="status" hidden>No matching meets</p>
+          </div>
+        </div>
+        <div class="meet-picker" id="archive-picker" hidden>
+          <input type="search" id="archive-search" aria-label="Search archived meets"
+            role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="archive-results"
+            placeholder="Loading archived meets…" autocomplete="off" disabled>
+          <div id="archive-popup" class="meet-popup" hidden>
+            <ul id="archive-results" role="listbox" aria-label="Matching archived meets"></ul>
+            <p id="archive-no-matches" role="status" hidden>No matching meets</p>
+          </div>
+        </div>
+      </div>
+    </header>
+
+    <p id="status" class="status" role="status"></p>
+    <button type="button" id="refresh-meet" hidden>Refresh meet</button>
+
+    <section class="controls">
+      <button type="button" id="prev-result" title="Back one result">&#9198;</button>
+      <button type="button" id="prev" title="Previous change (left arrow)">&#8249;</button>
+      <button type="button" id="next" title="Next change (right arrow)">&#8250;</button>
+      <button type="button" id="next-result" title="Forward one result (space)">&#9197;</button>
+      <button type="button" id="play">Play</button>
+      <label class="speed">
+        Pace
+        <select id="speed">
+          <option value="4000">Slow</option>
+          <option value="2000" selected>Steady</option>
+          <option value="800">Brisk</option>
+        </select>
+      </label>
+      <input type="range" id="scrub" min="0" max="0" value="0" step="1" title="Scrub through the meet">
+    </section>
+
+    <section id="event" class="event-log"></section>
+
+    <section id="sheet" class="sheet"></section>
+
+    <section id="standings" class="standings-wrap"></section>
+
+    <p class="hint">
+      Use ← and → to go through changes. Press Space for the next result.
+    </p>
+  </div>
+
+  <script src="ipf.js"></script>
+  <script src="records.js"></script>
+  <script src="replay.js"></script>
+  <script src="render.js"></script>
+  <script src="liftingcast.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
