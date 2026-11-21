@@ -14,6 +14,10 @@
   let replay = null;
   let cursor = 0;
   let playTimer = null;
+  let playback = null;
+  const resultHoldMs = 10_000;
+  let resultHold = null;
+  const shownPreviews = [];
   let loadVersion = 0;
   let refreshCurrentMeet = null;
 
@@ -134,6 +138,8 @@
       return;
     }
     stopPlaying();
+    clearResultHold();
+    shownPreviews.length = 0;
     replay = loaded;
 
     // Start just before the first recorded result: weights, body weights and
@@ -150,23 +156,40 @@
   function draw() {
     const state = Replay.buildStateAt(replay, cursor);
     const sheet = Replay.buildSheet(state, replay);
-    const lastStep = cursor > 0 ? replay.steps[cursor - 1] : null;
-    const description = lastStep ? Replay.describeStep(lastStep, replay, state) : null;
-
-    const highlight = { docId: null, lifterId: null };
-    if (lastStep) {
-      highlight.docId = lastStep.docId;
-      const doc = state.docs[lastStep.docId];
-      if (lastStep.docType === 'attempt' && doc) highlight.lifterId = doc.lifterId;
-      if (lastStep.docType === 'lifter') highlight.lifterId = lastStep.docId;
-    }
+    const currentAttemptId = Replay.nextJudgedAttemptId(replay, cursor, state);
+    const nextUpId = Replay.nextJudgedAttemptId(replay, cursor, state, currentAttemptId);
+    const currentAttempt = currentAttemptId === null ? null : state.docs[currentAttemptId];
+    const highlight = { nextAttemptId: currentAttemptId, lifterId: currentAttempt?.lifterId ?? null };
 
     const header = Render.renderHeader(sheet);
     ui.title.textContent = header.title;
     ui.subtitle.textContent = header.subtitle;
 
     Render.renderSheet(ui.sheet, sheet, highlight);
-    Render.renderEvent(ui.event, description);
+    const nextAttempt = nextUpId === null ? null : state.docs[nextUpId];
+    const attemptInfo = (attempt) => attempt ? {
+      name: state.docs[attempt.lifterId]?.name || 'Lifter',
+      weight: attempt.weight,
+      units: sheet.meet?.units,
+    } : null;
+    const held = resultHold && state.docs[resultHold.docId];
+    if (resultHold && (performance.now() >= resultHold.until
+      || (held?.result !== 'good' && held?.result !== 'bad'))) clearResultHold();
+    const left = resultHold
+      ? { ...attemptInfo(held), lights: Replay.describeAttemptLights(held.decisions) }
+      : attemptInfo(currentAttempt);
+    Render.renderEvent(ui.event, left, attemptInfo(nextAttempt));
+    const nextChange = Replay.describeNextStep(replay, cursor, state, sheet.meet?.units);
+    while (shownPreviews.length && shownPreviews.at(-1).cursor > cursor) shownPreviews.pop();
+    if (nextChange?.weightPreview && shownPreviews.at(-1)?.cursor !== cursor) {
+      shownPreviews.push({ cursor, text: nextChange.weightPreview });
+    }
+    const weightPreview = shownPreviews.at(-1)?.text || '';
+    const warning = nextChange?.warning || '';
+    if (ui.nextChange.textContent !== weightPreview) ui.nextChange.textContent = weightPreview;
+    if (ui.resultWarning.textContent !== warning) ui.resultWarning.textContent = warning;
+    ui.attemptPreview.hidden = !weightPreview;
+    ui.resultWarning.hidden = !warning;
     Render.renderStandings(ui.standings, sheet);
 
     ui.scrub.max = String(replay.steps.length);
@@ -178,39 +201,99 @@
     ui.prevResult.disabled = atStart;
     ui.next.disabled = atEnd;
     ui.nextResult.disabled = atEnd;
-    ui.play.textContent = playTimer ? 'Pause' : 'Play';
     if (atEnd) stopPlaying();
+    const anchor = playback ? null : nextSyncAnchor();
+    ui.play.disabled = !playback && anchor === null;
+    ui.play.textContent = !playback ? 'Sync & Play' : playback.paused ? 'Resume' : 'Pause';
+    ui.play.title = playback
+      ? `${ui.play.textContent} the replay clock when you ${ui.play.textContent.toLowerCase()} the video`
+      : anchor === null ? 'No upcoming result with a recorded time to sync to'
+        : 'Press when the next result appears in the video';
+  }
+
+  function clearResultHold() {
+    if (resultHold) clearTimeout(resultHold.timer);
+    resultHold = null;
   }
 
   function moveTo(nextCursor) {
     if (!replay) return;
-    cursor = Math.max(0, Math.min(nextCursor, replay.steps.length));
+    const target = Math.max(0, Math.min(nextCursor, replay.steps.length));
+    if (target < cursor) clearResultHold();
+    const step = target > cursor ? replay.steps[target - 1] : null;
+    cursor = target;
+    if (step && Replay.stepRecordsResult(step)) {
+      const result = step.entries.findLast(({ path }) => path.length === 1 && path[0] === 'result');
+      if (result.value === 'good' || result.value === 'bad') {
+        clearResultHold();
+        resultHold = {
+          docId: step.docId,
+          until: performance.now() + resultHoldMs,
+          timer: setTimeout(() => { clearResultHold(); draw(); }, resultHoldMs),
+        };
+      }
+    }
     draw();
   }
 
+  function cancelPlaybackTimer() {
+    if (playTimer !== null) clearTimeout(playTimer);
+    playTimer = null;
+  }
+
   function stopPlaying() {
-    if (playTimer) {
-      clearInterval(playTimer);
-      playTimer = null;
+    cancelPlaybackTimer();
+    playback = null;
+  }
+
+  function nextSyncAnchor() {
+    const index = Replay.nextResultIndex(replay, cursor) - 1;
+    const step = replay.steps[index];
+    return index >= cursor && step && Replay.stepRecordsResult(step)
+      && Replay.playbackOffset(replay, index, index) !== null ? index : null;
+  }
+
+  function schedulePlayback() {
+    if (!playback || playback.paused) return;
+    const offset = Replay.playbackOffset(replay, playback.anchor, cursor);
+    if (offset === null) {
+      stopPlaying();
+      setStatus('Playback stopped: the next change has no usable recorded time. Step forward manually to continue.');
+      draw();
+      return;
     }
+    const delay = offset - (performance.now() - playback.startedAt);
+    // Timer delays use a signed 32-bit value. Recheck on wakeup, including
+    // after long gaps, and use the original clock so rendering cannot add drift.
+    playTimer = setTimeout(() => {
+      playTimer = null;
+      if (performance.now() - playback.startedAt >= offset) moveTo(cursor + 1);
+      schedulePlayback();
+    }, Math.max(0, Math.min(Math.ceil(delay), 2 ** 31 - 1)));
   }
 
   function togglePlay() {
     if (!replay) return;
-    if (playTimer) {
-      stopPlaying();
+    const now = performance.now();
+    if (playback && !playback.paused) {
+      cancelPlaybackTimer();
+      playback.elapsed = now - playback.startedAt;
+      playback.paused = true;
       draw();
       return;
     }
-    playTimer = setInterval(() => {
-      if (cursor >= replay.steps.length) {
-        stopPlaying();
-        draw();
-        return;
-      }
-      moveTo(Replay.nextResultIndex(replay, cursor));
-    }, Number(ui.speed.value));
-    draw();
+    if (playback) {
+      playback.startedAt = now - playback.elapsed;
+      playback.paused = false;
+      draw();
+    } else {
+      const anchor = nextSyncAnchor();
+      if (anchor === null) return;
+      playback = { anchor, startedAt: now, paused: false };
+      setStatus('');
+      moveTo(anchor + 1);
+    }
+    schedulePlayback();
   }
 
   function bind() {
@@ -227,10 +310,12 @@
       scrub: id('scrub'),
       prev: id('prev'),
       next: id('next'),
+      nextChange: id('next-change'),
+      attemptPreview: id('attempt-preview'),
+      resultWarning: id('result-warning'),
       prevResult: id('prev-result'),
       nextResult: id('next-result'),
       play: id('play'),
-      speed: id('speed'),
     });
     const { listMeets, fetchMeet, listArchivedMeets, fetchArchivedMeet } = window.MeetLiftingCast;
     bindMeetSearch('meet', {

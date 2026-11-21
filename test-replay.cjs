@@ -87,6 +87,64 @@ check('next-result walks to the end', cursor, replay.steps.length);
 console.log(`next-result stops: ${resultSteps}`);
 check('previous-result reverses', R.previousResultIndex(replay, replay.steps.length) < replay.steps.length, true);
 
+// --- next attempt outline follows judging order, not intervening edits
+const firstJudged = replay.firstResultIndex;
+const upcoming = (index) => R.nextJudgedAttemptId(replay, index, R.buildStateAt(replay, index));
+const firstId = replay.steps[firstJudged].docId;
+const secondJudged = R.nextResultIndex(replay, firstJudged + 1) - 1;
+check('outline starts on the first attempt', upcoming(firstJudged), firstId);
+const firstJudgedState = R.buildStateAt(replay, firstJudged);
+check('Next up skips the outlined attempt', R.nextJudgedAttemptId(replay, firstJudged, firstJudgedState, firstId),
+  replay.steps[secondJudged].docId);
+const repeatedCurrent = { ...replay, steps: [replay.steps[firstJudged], ...replay.steps.slice(firstJudged)] };
+check('Next up skips repeated verdicts for the outlined attempt',
+  R.nextJudgedAttemptId(repeatedCurrent, 0, firstJudgedState, firstId), replay.steps[secondJudged].docId);
+check('Next up is empty if only the outlined attempt remains',
+  R.nextJudgedAttemptId({ ...replay, steps: [replay.steps[firstJudged]] }, 0, firstJudgedState, firstId), null);
+check('outline moves past the judged attempt', upcoming(firstJudged + 1), replay.steps[secondJudged].docId);
+check('outline is absent at the end', upcoming(replay.steps.length), null);
+const pendingState = R.buildStateAt(replay, firstJudged);
+pendingState.docs[firstId].weight = null;
+check('outline stays on the next attempt even without a declared weight',
+  R.nextJudgedAttemptId(replay, firstJudged, pendingState), firstId);
+for (const value of ['good', 'bad']) {
+  const steps = replay.steps.slice();
+  steps[firstJudged] = { ...steps[firstJudged], entries: [{ path: ['result'], value }] };
+  check(`outline is identical before ${value}`, R.nextJudgedAttemptId(
+    { ...replay, steps }, firstJudged, R.buildStateAt(replay, firstJudged)), firstId);
+}
+
+// --- next-change preview: only the immediate update, never a verdict
+const preview = (index) => R.describeNextStep(replay, index, R.buildStateAt(replay, index), 'KG');
+const squatWarning = { warning: '⚠️ Squat result next' };
+check('next preview names the lifter and attempt on submission', preview(beaDead2[0].index),
+  { weightPreview: 'Bea Okonkwo submitted an attempt of 215kg for Deadlift 2.' });
+check('next preview says lowered when the weight goes down', preview(beaDead2[1].index),
+  { weightPreview: 'Bea Okonkwo lowered their Deadlift 2 to 212.5kg.' });
+check('next preview hides a good result', preview(replay.firstResultIndex), squatWarning);
+check('next preview hides a bad result', preview(replay.steps.findIndex((step) =>
+  step.docId === 'a3s-l-bea' && R.stepRecordsResult(step))), squatWarning);
+check('next preview hides a judging clear', preview(clearIndex), squatWarning);
+check('next preview ignores other sheet updates', preview(replay.steps.findIndex((step) => step.docType === 'lifter')), null);
+check('next preview handles end of replay', preview(replay.steps.length), null);
+
+const changeIndex = beaDead2[1].index;
+const beforeChange = R.buildStateAt(replay, changeIndex);
+const mixed = (path, value) => {
+  const steps = replay.steps.slice();
+  const step = steps[changeIndex];
+  steps[changeIndex] = { ...step, entries: [...step.entries, { path, value }] };
+  return R.describeNextStep({ ...replay, steps }, changeIndex, beforeChange, 'KG');
+};
+const deadliftWarning = { warning: '⚠️ Deadlift result next' };
+check('next preview hides weight paired with a result', mixed(['result'], 'bad'), deadliftWarning);
+check('next preview hides weight paired with judge lights', mixed(['decisions', 'head', 'decision'], 'good'), deadliftWarning);
+check('next preview hides weight paired with a jury override', mixed(['juryOverride'], true), deadliftWarning);
+check('next preview ignores a weight cleared in the same revision', mixed(['weight'], 0), null);
+check('next preview says raised when the weight goes up', mixed(['weight'], 220),
+  { weightPreview: 'Bea Okonkwo raised their Deadlift 2 to 220kg.' });
+check('next preview does not apply the update', beforeChange.docs[beaDead2[1].docId].weight, 215);
+
 // --- describeStep does not throw and names the lifter
 const lastDesc = R.describeStep(replay.steps[replay.steps.length - 1], replay, end);
 console.log('last event:', JSON.stringify(lastDesc));

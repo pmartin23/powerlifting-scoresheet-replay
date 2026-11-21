@@ -235,9 +235,14 @@ function buildStateAt(replay, cursor) {
     for (const { path, value } of step.entries) {
       setAtPath(doc, path, value && typeof value === 'object' ? deepClone(value) : value);
     }
-    if (step.docType === 'attempt' && !initialWeights.has(step.docId)
-      && Number.isFinite(doc.weight) && doc.weight > 0) {
-      initialWeights.set(step.docId, doc.weight);
+    if (step.docType === 'attempt') {
+      // A blank attempt starts a new declaration. Clearing only the verdict
+      // leaves the weight in place, so it keeps the previous declaration.
+      if (!Number.isFinite(doc.weight) || doc.weight <= 0) {
+        initialWeights.delete(step.docId);
+      } else if (!initialWeights.has(step.docId)) {
+        initialWeights.set(step.docId, doc.weight);
+      }
     }
     if (stepRecordsResult(step) && (doc.result === 'good' || doc.result === 'bad')) {
       activeLifterId = doc.lifterId;
@@ -649,11 +654,39 @@ function describeAttemptLights(decisions) {
   return lights.every((light) => light === '—') ? 'No judges’ lights recorded' : lights.join(' ');
 }
 
+function stepTouchesJudging(step) {
+  return step.docType === 'attempt' && step.entries.some(({ path }) =>
+    ['result', 'decisions', 'juryOverride', 'juryOverturnCard', 'preJuryOverturnDecisions'].includes(path[0]));
+}
+
+/** Preview only the next revision, without applying it or reading its verdict. */
+function describeNextStep(replay, cursor, state, units) {
+  const step = replay.steps[cursor];
+  if (step?.docType !== 'attempt') return null;
+
+  const doc = state.docs[step.docId];
+  const lift = LIFT_LABELS[doc?.liftName] || 'Lift';
+  if (stepTouchesJudging(step)) return { warning: `⚠️ ${lift} result next` };
+
+  const weightEntry = step.entries.findLast(({ path }) => path.length === 1 && path[0] === 'weight');
+  if (!weightEntry) return null;
+  const weight = weightEntry.value;
+  const previous = doc?.weight;
+  const isWeight = (value) => Number.isFinite(value) && value > 0;
+  if (!isWeight(weight) || previous === weight) return null;
+
+  const name = state.docs[doc?.lifterId]?.name || 'A lifter';
+  const attempt = doc?.attemptNumber ? `${lift} ${doc.attemptNumber}` : lift;
+  const suffix = typeof units === 'string' ? units.toLowerCase() : '';
+  return { weightPreview: isWeight(previous)
+    ? `${name} ${weight > previous ? 'raised' : 'lowered'} their ${attempt} to ${weight}${suffix}.`
+    : `${name} submitted an attempt of ${weight}${suffix} for ${attempt}.` };
+}
+
 function describeStep(step, replay, state) {
   const doc = state.docs[step.docId];
   const isResult = stepRecordsResult(step);
-  const isJudgingStep = step.docType === 'attempt' && step.entries.some(({ path }) =>
-    ['result', 'decisions', 'juryOverride', 'juryOverturnCard', 'preJuryOverturnDecisions'].includes(path[0]));
+  const isJudgingStep = stepTouchesJudging(step);
   const completed = doc?.result === 'good' || doc?.result === 'bad';
   const isJuryOverturn = isJudgingStep && completed && doc.juryOverride === true;
   const detail = isJuryOverturn ? `JURY OVERTURNED TO ${doc.result === 'good' ? 'GOOD LIFT' : 'NO LIFT'}`
@@ -689,6 +722,29 @@ function nextResultIndex(replay, cursor) {
   return replay.steps.length;
 }
 
+/** Identify the next pending attempt to receive a verdict, optionally skipping the current attempt. */
+function nextJudgedAttemptId(replay, cursor, state, skipAttemptId = null) {
+  for (let i = cursor; i < replay.steps.length; i++) {
+    const step = replay.steps[i];
+    if (step.docId === skipAttemptId || !stepRecordsResult(step)) continue;
+    const attempt = state.docs[step.docId];
+    if (!attempt || attempt.result === 'good' || attempt.result === 'bad') continue;
+    const result = step.entries.findLast(({ path }) => path.length === 1 && path[0] === 'result');
+    if (result.value !== 'good' && result.value !== 'bad') continue;
+    // The lifter can be up next even if the recorded weight isn't visible yet.
+    return step.docId;
+  }
+  return null;
+}
+
+/** Delay from the sync result to a replay step, or null if it cannot be timed. */
+function playbackOffset(replay, anchorIndex, stepIndex) {
+  const anchor = Date.parse(replay.steps[anchorIndex]?.timeStamp);
+  const next = Date.parse(replay.steps[stepIndex]?.timeStamp);
+  const offset = next - anchor;
+  return Number.isFinite(offset) && offset >= 0 ? offset : null;
+}
+
 function previousResultIndex(replay, cursor) {
   for (let i = cursor - 2; i >= 0; i--) {
     if (stepRecordsResult(replay.steps[i])) return i + 1;
@@ -704,9 +760,14 @@ window.MeetReplay = {
   buildStateAt,
   buildSheet,
   describeStep,
+  describeAttemptLights,
+  describeNextStep,
   nextResultIndex,
+  nextJudgedAttemptId,
+  playbackOffset,
   previousResultIndex,
   stepRecordsResult,
+  stepTouchesJudging,
   extractDocs,
   classifyDoc,
 };

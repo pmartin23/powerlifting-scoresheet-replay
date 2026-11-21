@@ -13,12 +13,12 @@
   const cooldowns = new Map();
 
   function readCache(key) {
-    try { return JSON.parse(window.localStorage.getItem(`meet-replay:${key}`)); }
+    try { return JSON.parse(window.localStorage.getItem(`powerlifting-scoresheet-replay:${key}`)); }
     catch { return null; }
   }
 
   function writeCache(key, value) {
-    try { window.localStorage.setItem(`meet-replay:${key}`, JSON.stringify(value)); }
+    try { window.localStorage.setItem(`powerlifting-scoresheet-replay:${key}`, JSON.stringify(value)); }
     catch { /* Cached data is still available for this page. */ }
   }
 

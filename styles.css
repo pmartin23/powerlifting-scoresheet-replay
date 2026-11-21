@@ -77,11 +77,16 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 
 .controls #scrub { flex: 1 1 240px; min-width: 180px; }
-
-.speed { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); }
-.speed select { padding: 4px 8px; }
+.next-change { flex-basis: 100%; margin: 0; font-size: 16px; color: var(--muted); }
+/* Reserve space for transient text without fixing the row height. */
+.status-slot { min-block-size: 1lh; }
+.result-warning { color: var(--bad); font-weight: 600; }
 
 .event-log {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
   border: 1px solid var(--line);
   border-left: 3px solid var(--line);
   border-radius: 6px;
@@ -91,11 +96,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 }
 
 .event-log .event { display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: baseline; }
-.event-log.event-result, .event-result { border-left-color: var(--accent); }
-.event-time { color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
 .event-subject { font-weight: 600; }
 .event-detail { color: var(--muted); }
-.event-empty { color: var(--muted); }
+.event-next-up { margin-inline-start: auto; text-align: end; font-weight: 600; }
 
 .sheet { margin-top: 16px; overflow-x: auto; }
 
@@ -151,8 +154,6 @@ button:disabled { opacity: 0.4; cursor: default; }
 .weight-change-badge { left: 3px; }
 .jury-badge { top: auto; bottom: 1px; right: 3px; color: #fff; background: #6b21a8; }
 .cell-attempt.jury-overturn { padding-right: 15px; }
-.event-jury .event-detail { color: var(--bad); font-weight: 700; }
-.event-jury-good .event-detail { color: var(--good); }
 .weight-increased { color: var(--good); background: var(--good-bg); }
 .weight-decreased { color: var(--bad); background: var(--bad-bg); }
 .scoresheet .has-attempt-tooltip { position: relative; }
@@ -187,7 +188,7 @@ button:disabled { opacity: 0.4; cursor: default; }
 .result-bad .attempt-weight { text-decoration: line-through; }
 .result-pending { background: var(--pending-bg); color: var(--muted); }
 
-.just-changed { outline: 2px solid var(--accent); outline-offset: -2px; }
+.next-attempt { outline: 2px solid var(--accent); outline-offset: -2px; }
 .row-active { background: #f7f9ff; }
 
 .hint { color: var(--muted); font-size: 12px; margin-top: 14px; }

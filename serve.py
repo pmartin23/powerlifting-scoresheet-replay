@@ -1,4 +1,4 @@
-"""Serve Meet Replay locally and relay public LiftingCast archive reads."""
+"""Serve Powerlifting Scoresheet Replay locally and relay public LiftingCast archive reads."""
 
 import argparse
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer

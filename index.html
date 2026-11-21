@@ -3,14 +3,14 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Meet replay</title>
+  <title>Powerlifting Scoresheet Replay</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <div id="app" class="empty">
     <header class="masthead">
       <div class="headings">
-        <h1 id="title">Meet replay</h1>
+        <h1 id="title">Powerlifting Scoresheet Replay</h1>
         <p id="subtitle">Follow a powerlifting scoresheet as it filled in, without seeing the end.</p>
       </div>
       <div class="sources">
@@ -43,16 +43,10 @@
       <button type="button" id="prev" title="Previous change (left arrow)">&#8249;</button>
       <button type="button" id="next" title="Next change (right arrow)">&#8250;</button>
       <button type="button" id="next-result" title="Forward one result (space)">&#9197;</button>
-      <button type="button" id="play">Play</button>
-      <label class="speed">
-        Pace
-        <select id="speed">
-          <option value="4000">Slow</option>
-          <option value="2000" selected>Steady</option>
-          <option value="800">Brisk</option>
-        </select>
-      </label>
+      <button type="button" id="play" title="Reveal the next result and sync to its recorded time">Sync &amp; Play</button>
       <input type="range" id="scrub" min="0" max="0" value="0" step="1" title="Scrub through the meet">
+      <p class="next-change" id="attempt-preview" role="status" hidden><span id="next-change"></span></p>
+      <p class="next-change status-slot" role="status"><span class="result-warning" id="result-warning" hidden></span></p>
     </section>
 
     <section id="event" class="event-log"></section>

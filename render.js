@@ -22,7 +22,7 @@
 
   function renderHeader(sheet) {
     const meet = sheet.meet || {};
-    const title = meet.name || 'Meet replay';
+    const title = meet.name || 'Powerlifting Scoresheet Replay';
     const bits = [];
     if (meet.date) bits.push(meet.date);
     if (meet.federation) bits.push(meet.federation);
@@ -94,7 +94,7 @@
     return lights;
   }
 
-  function renderAttemptCell(attempt, highlightDocId, recordWeight, units) {
+  function renderAttemptCell(attempt, nextAttemptId, recordWeight, units) {
     const classes = ['cell-attempt'];
     let text = '';
 
@@ -104,11 +104,11 @@
       else if (attempt.result === 'bad') classes.push('result-bad');
       else classes.push('result-pending');
     }
-    if (attempt && highlightDocId && attempt.docId === highlightDocId) {
-      classes.push('just-changed');
-    }
+    const isNext = Boolean(attempt && attempt.docId === nextAttemptId);
+    if (isNext) classes.push('next-attempt');
 
     const cell = element('td', classes.join(' '));
+    if (isNext) cell.setAttribute('aria-label', text ? `Up next: ${text}` : 'Up next');
     if (text) cell.appendChild(element('span', 'attempt-weight', text));
     const completed = attempt?.result === 'good' || attempt?.result === 'bad';
     let weightChange = '';
@@ -203,7 +203,7 @@
     for (const liftName of LIFT_ORDER) {
       for (let i = 0; i < ATTEMPT_NUMBERS.length; i++) {
         tr.appendChild(renderAttemptCell(
-          row.lifts[liftName][i], highlight.docId, row.liftRecords[liftName], units,
+          row.lifts[liftName][i], highlight.nextAttemptId, row.liftRecords[liftName], units,
         ));
       }
     }
@@ -266,18 +266,20 @@
     container.replaceChildren(table);
   }
 
-  function renderEvent(container, description) {
-    if (!description) {
-      container.replaceChildren(element('span', 'event-empty', 'Nothing applied yet.'));
-      return;
+  function renderEvent(container, current, nextUp) {
+    const label = ({ name, weight, units }) => {
+      const suffix = typeof units === 'string' ? units.toLowerCase() : '';
+      return Number.isFinite(weight) && weight > 0 ? `${name} ${weight}${suffix}` : name;
+    };
+    const items = [];
+    if (current) {
+      const left = element('div', 'event');
+      left.appendChild(element('span', 'event-subject', label(current)));
+      if (current.lights) left.appendChild(element('span', 'event-detail', current.lights));
+      items.push(left);
     }
-    const style = description.isJuryOverturn ? ' event-jury' : description.isResult ? ' event-result' : '';
-    const verdictStyle = description.isJuryOverturn && description.juryVerdict === 'good' ? ' event-jury-good' : '';
-    const wrap = element('div', `event${style}${verdictStyle}`);
-    wrap.appendChild(element('span', 'event-time', description.timeStamp || ''));
-    wrap.appendChild(element('span', 'event-subject', description.subject));
-    wrap.appendChild(element('span', 'event-detail', description.detail));
-    container.replaceChildren(wrap);
+    if (nextUp) items.push(element('span', 'event-next-up', `Next up: ${label(nextUp)}`));
+    container.replaceChildren(...items);
   }
 
   /**

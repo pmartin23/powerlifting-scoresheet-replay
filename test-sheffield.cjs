@@ -76,6 +76,18 @@ global.document = { createElement() {
   return node;
 } };
 require('./render.js');
+const nextUpBar = document.createElement('div');
+global.MeetRender.renderEvent(nextUpBar, { name: 'Current lifter', weight: 100, units: 'KG', lights: '⚪️ — 🔴' },
+  { name: 'Paige Martin', weight: 105, units: 'KG' });
+check('left toolbar shows only the lifter, weight and lights',
+  nextUpBar.children[0].children.map((node) => node.textContent), ['Current lifter 100kg', '⚪️ — 🔴']);
+check('right toolbar still shows the next lifter and entered weight',
+  nextUpBar.children[1].textContent, 'Next up: Paige Martin 105kg');
+global.MeetRender.renderEvent(nextUpBar, null, { name: 'Paige Martin', weight: null, units: 'KG' });
+check('Next up still shows the lifter before the weight is known',
+  nextUpBar.children.at(-1).textContent, 'Next up: Paige Martin');
+global.MeetRender.renderEvent(nextUpBar, null, null);
+check('the toolbar is empty when no attempt is pending or held', nextUpBar.children.length, 0);
 const groupedSheet = { ...sheet, rows: sheet.rows.slice(0, 5).map((row, index) => ({
   ...row,
   name: `Lifter ${index + 1}`,
@@ -243,6 +255,34 @@ check('rewinding before the edit clears the badge', hasChangedBadge(editedCell(e
 check('judging an unchanged attempt shows no change badge',
   hasChangedBadge(attemptCell(sheet, lifterName, 'squat', 2)), false);
 
+for (const clearedWeight of [null, '', 0]) {
+  const data = JSON.parse(JSON.stringify(editedExport));
+  const doc = data.rows.find(({ id }) => id === editedAttempt._id).doc;
+  const start = Date.parse(originalEntry.timeStamp);
+  const changes = [
+    ['20-clear-result', 'result', null],
+    ['21-clear-weight', 'weight', clearedWeight],
+    ['22-reenter', 'weight', 335],
+    ['23-edit-new-weight', 'weight', 337.5],
+  ];
+  changes.forEach(([rev, attribute, value], i) => {
+    doc.changes.push({ rev, attribute, value, timeStamp: new Date(start + (i + 2) * 1000).toISOString() });
+  });
+  const resetReplay = R.buildReplay(data);
+  const cellAt = (rev) => {
+    const cursor = resetReplay.steps.findIndex((step) => step.rev === rev) + 1;
+    return attemptCell(R.buildSheet(R.buildStateAt(resetReplay, cursor), resetReplay), lifterName, 'squat', 2);
+  };
+  const label = `clear with ${JSON.stringify(clearedWeight)}`;
+  check(`${label}: clearing just the result keeps the badge`, hasChangedBadge(cellAt('20-clear-result')), true);
+  check(`${label}: no badge on a cleared weight`, hasChangedBadge(cellAt('21-clear-weight')), false);
+  check(`${label}: no badge on the new declaration`, hasChangedBadge(cellAt('22-reenter')), false);
+  check(`${label}: edit compares against the new declaration`, tooltipDetail(cellAt('23-edit-new-weight')),
+    'Increased from 335 kg to 337.5 kg');
+  check(`${label}: rewinding restores the old comparison`, tooltipDetail(cellAt('10-edit')),
+    'Increased from 337.5 kg to 340 kg\nRecord attempt (record: 338)');
+}
+
 for (const verdict of ['good', 'bad']) {
   const data = JSON.parse(JSON.stringify(global.MEET_REPLAY_SHEFFIELD));
   const docId = byName[lifterName].lifts.squat[verdict === 'good' ? 2 : 1].docId;
@@ -263,12 +303,6 @@ for (const verdict of ['good', 'bad']) {
   check(`no J before the ${verdict} overturn`, hasJ(cellAt(R.buildStateAt(juryReplay, step.index))), false);
   check(`J appears after the ${verdict} overturn`, hasJ(cellAt(state)), true);
   check(`the ${verdict} ruling sets the cell color`, cellAt(state).className.includes(`result-${verdict}`), true);
-  const ruling = `Jury overturned to ${verdict === 'good' ? 'Good lift' : 'No lift'}`;
-  const event = document.createElement('div');
-  global.MeetRender.renderEvent(event, R.describeStep(step, juryReplay, state));
-  check(`the ${verdict} ruling is emphasized in the toolbar`,
-    [event.children[0].className, event.children[0].children.at(-1).textContent],
-    [verdict === 'good' ? 'event event-jury event-jury-good' : 'event event-jury', ruling.toUpperCase()]);
   check('the tooltip keeps the original judges’ lights', lightsOf(cellAt(state)),
     ['left', 'head', 'right'].map((position) => originalLights[position].decision === 'good' ? '⚪️' : '🔴'));
   check('undoing the overturn clears the J', hasJ(cellAt(R.buildStateAt(juryReplay, step.index + 2))), false);

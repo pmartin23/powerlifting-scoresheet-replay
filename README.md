@@ -1,15 +1,15 @@
-# Meet replay
+# Powerlifting Scoresheet Replay
 
 Follow a powerlifting scoresheet filling in as it happened, so you can watch a
 recorded meet without the final result sitting on screen in front of you.
 
-> **Disclaimer:** This app was entirely vibe-coded. Treat it as a replay companion, not an official scoresheet.
+> **Disclaimer:** This app was entirely vibe-coded and has only been tested on International Powerlifting Federation (IPF) meet data. Treat it as a replay companion, not an official scoresheet.
 
 ## Open in your browser
 
 1. Download or check out the project. If you downloaded a zip, extract it first
-   and keep the `meet-replay` folder together.
-2. Open **`meet-replay/index.html`** in a current desktop browser. No Python,
+   and keep the `powerlifting-scoresheet-replay` folder together.
+2. Open **`powerlifting-scoresheet-replay/index.html`** in a current desktop browser. No Python,
    terminal, account, or build is needed.
 3. With an internet connection, use **Search LiftingCast meets** to find a meet
    in the current public catalog. Start your video separately and press
@@ -18,8 +18,8 @@ recorded meet without the final result sitting on screen in front of you.
 ### Optional: search the full archive
 
 The archive search is hidden when you open the file directly. To use it, run
-`python3 serve.py` from the `meet-replay` folder (on Windows, `py -3 serve.py`)
-and visit <http://127.0.0.1:8000/>. Python 3.10 or newer is recommended. Keep the
+`python3 serve.py` from the `powerlifting-scoresheet-replay` folder (on Windows,
+`py -3 serve.py`) and visit <http://127.0.0.1:8000/>. Python 3.10 or newer is recommended. Keep the
 terminal open while you watch; press **Ctrl+C** to stop the server. It only
 listens on your computer.
 
@@ -43,11 +43,31 @@ In **Search archived meets**, try `Sheffield 2026-01-31` and select
 | --- | --- |
 | `→` / `←` | Next or previous change |
 | `Space` | Jump to the next result — the useful one while watching |
-| Play / Pause | Auto-advance through results at the selected pace; not synced to the video |
+| Sync & Play | Reveal the next result and play subsequent changes at their recorded times |
+| Pause / Resume | Pause or resume the replay clock when you pause or resume the video |
 | Timeline slider | Jump anywhere, including straight to the end |
 
 The replay opens just before the first recorded result, with any declarations
-already entered by then. Use **Space** to follow the video without jumping ahead.
+already entered by then. For manual playback, use **Space** to reveal each result.
+
+For automatic playback, start the video separately. When its first result
+appears, click **Sync & Play**. The replay reveals that result and follows the
+recorded timing for all subsequent changes, including weight changes. Pause and
+resume both the video and the replay together. To resync, use the manual controls
+to get just before a known result, then click **Sync & Play** when that result
+appears in the video. Timing can drift because LiftingCast records when updates
+were entered, not when they appeared on video.
+
+The attempt preview shows a newly submitted, raised, or lowered weight
+when it is the next change, then keeps that preview visible until another
+one appears. When **→** would apply a judging update, a separate warning says
+which lift’s result is next without previewing its verdict, lights, or any
+weight in the same update. The blue outline stays on the first
+pending attempt until it gets a good or bad result. **Next up** shows the
+attempt after the outlined one, with its weight once it appears on the sheet.
+The left side shows the current lifter and weight. When a result comes in,
+it keeps that lifter, weight, and judge lights on screen for 10 seconds before
+switching to the current attempt. A newer result replaces the earlier lights.
 
 ## What the replay can reconstruct
 
@@ -69,7 +89,8 @@ Consequences worth knowing:
 
 ## Tests and project files
 
-Node.js 22 or newer is recommended for the tests only. From `meet-replay`, run:
+Node.js 22 or newer is recommended for the tests only. From the
+`powerlifting-scoresheet-replay` folder, run:
 
 ```sh
 node --test test-*.cjs
@@ -208,9 +229,9 @@ percentage can be checked against the number behind it, and a single lift can
 be watched against the record too. An **R** marks any entered attempt above
 its class record in the export, whether pending, made, or missed.
 A green **+** marks an increase and a red **−** marks a decrease from the first
-entered weight. Hover over the cell or focus it with Tab to see both weights.
+weight entered since the attempt weight was last cleared. Hover over the cell
+or focus it with Tab to see both weights.
 Completed attempts also show each judge’s light (left, head, right) with any
 recorded infraction cards beneath the corresponding red light. A purple **J**
-marks a recorded jury overturn. The event line announces **JURY OVERTURNED
-TO GOOD LIFT** in green or **JURY OVERTURNED TO NO LIFT** in red; hover for the original
-judges’ lights if available.
+marks a recorded jury overturn. The cell color shows the revised verdict;
+hover for the original judges’ lights if available.
